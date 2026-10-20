@@ -72,7 +72,22 @@ async function load() {
   });
 }
 
+// On the test page, files only kept VoiceOver talking after the page had made its own tone,
+// so keep an inaudible page-made tone running underneath the episodes
+let keepAlive;
+function startKeepAlive() {
+  if (keepAlive) return keepAlive.resume();
+  keepAlive = new AudioContext();
+  const osc = keepAlive.createOscillator();
+  const gain = keepAlive.createGain();
+  gain.gain.value = 0.0001;
+  osc.connect(gain).connect(keepAlive.destination);
+  osc.start();
+  log('Silent tone started');
+}
+
 function playEpisode(i) {
+  startKeepAlive();
   current = i;
   const ep = episodes[i];
   // A short beep first: short local clips have not silenced VoiceOver, so it may stop the episode from doing so
@@ -84,6 +99,7 @@ function playEpisode(i) {
 
 function start() {
   if (current < 0) return playEpisode(0);
+  startKeepAlive();
   player.play().catch(e => say('Could not play: ' + e.message));
 }
 

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sporting Witness PoC</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 16px; background: #fff; color: #111; }
+  @media (prefers-color-scheme: dark) { body { background: #111; color: #eee; } }
+  audio { width: 100%; margin: 12px 0; }
+  li { margin: 8px 0; }
+  button { font-size: 1rem; padding: 6px 12px; margin-right: 8px; }
+  #log { font-family: monospace; font-size: .85rem; white-space: pre-wrap; opacity: .8; }
+</style>
+</head>
+<body>
+<h1>Sporting Witness — PoC</h1>
+<p>Checks the feed loads in the browser and that the audio plays from GitHub Pages.</p>
+<div id="now">Nothing playing</div>
+<audio id="player" controls preload="none"></audio>
+<ol id="list"></ol>
+<h2>Log</h2>
+<div id="log"></div>
+<script>
+const FEED = 'https://podcasts.files.bbci.co.uk/p00j2pn5.rss';
+const player = document.getElementById('player');
+const log = msg => { document.getElementById('log').textContent += new Date().toLocaleTimeString() + ' ' + msg + '\n'; };
+
+async function load() {
+  log('Fetching feed…');
+  const res = await fetch(FEED);
+  const xml = new DOMParser().parseFromString(await res.text(), 'text/xml');
+  const episodes = [...xml.querySelectorAll('item')].map(item => ({
+    guid: item.querySelector('guid')?.textContent,
+    title: item.querySelector('title')?.textContent,
+    date: new Date(item.querySelector('pubDate')?.textContent),
+    // Upgrade to https so the page isn't loading mixed content
+    url: item.querySelector('enclosure')?.getAttribute('url').replace(/^http:/, 'https:'),
+  })).sort((a, b) => a.date - b.date);
+  log(`Loaded ${episodes.length} episodes, oldest ${episodes[0].date.toDateString()}`);
+
+  const list = document.getElementById('list');
+  for (const ep of episodes.slice(0, 5)) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.textContent = '▶';
+    btn.onclick = () => play(ep);
+    li.append(btn, `${ep.date.toLocaleDateString()} — ${ep.title}`);
+    list.append(li);
+  }
+}
+
+function play(ep) {
+  document.getElementById('now').textContent = 'Now playing: ' + ep.title;
+  player.src = ep.url;
+  player.play().then(() => log('Playing ' + ep.title)).catch(e => log('Play failed: ' + e.message));
+}
+
+player.addEventListener('error', () => log('Audio error code ' + player.error?.code + ': ' + (player.error?.message || '')));
+player.addEventListener('ended', () => log('Episode ended'));
+load().catch(e => log('Feed failed: ' + e.message));
+</script>
+</body>
+</html>

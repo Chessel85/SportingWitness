@@ -1,0 +1,7 @@
+There is a radio programme or podcast by BBC World Service called Sporting Witness.  I've only just discovered it.
+It has hundreds of episodes.  I'd like to systematically work my way through the back catalogue starting from the first episode.
+My idea is to listen to episodes when I'm running on my treadmill.  So I need to have a simple web page where it let's me see the next upcoming episodes I have not yet listened to and either mark an episode as one I don't want to listen to, or to play it.
+On finishing it should autoplay the next one.
+Other controls should be start/pause/stop, skip to next.  That'll probably do.
+A github web site should be good enough to host the page.
+Can you plan out how this can be implemented?

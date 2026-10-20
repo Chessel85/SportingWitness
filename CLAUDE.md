@@ -41,7 +41,7 @@ So the rules for the player are:
 - Loads the feed, sorts oldest first, and lists the first 5 episodes as "Play <title>, <date>" buttons.
 - Play/Pause, Stop and Next episode controls. Autoplay to the next episode works.
 - "Test: skip to last 10 seconds" button, used to test autoplay. Remove it in the full build, or keep it if the user wants it.
-- Announces "Playing <title>" 3 seconds after playback starts.
+- Announces "Playing <title>" 0.2 seconds after playback starts (cut from 3 seconds; awaiting VoiceOver confirmation).
 - No progress is saved yet.
 
 ## Next steps

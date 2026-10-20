@@ -127,7 +127,7 @@ player.addEventListener('playing', () => {
   playPauseBtn.textContent = 'Pause';
   if (announcePending) {
     announcePending = false;
-    setTimeout(() => say('Playing ' + episodes[current].title), 3000);
+    setTimeout(() => say('Playing ' + episodes[current].title), 200);
   }
 });
 player.addEventListener('pause', () => { playPauseBtn.textContent = 'Play'; if (player.currentTime > 0 && !player.ended) say('Paused'); });

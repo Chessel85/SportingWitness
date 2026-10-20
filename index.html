@@ -41,6 +41,7 @@ const statusEl = document.getElementById('status');
 const playPauseBtn = document.getElementById('playPause');
 let episodes = [];
 let current = -1;
+let announcePending = false;
 
 const log = msg => { document.getElementById('log').textContent += new Date().toLocaleTimeString() + ' ' + msg + '\n'; };
 const say = msg => { statusEl.textContent = msg; log(msg); };
@@ -73,7 +74,9 @@ function playEpisode(i) {
   current = i;
   const ep = episodes[i];
   player.src = ep.url;
-  say('Playing ' + ep.title);
+  // VoiceOver goes silent if it is mid-sentence when a new episode's audio starts, so announce afterwards
+  log('Starting ' + ep.title);
+  announcePending = true;
   start();
 }
 
@@ -98,7 +101,13 @@ playPauseBtn.onclick = () => player.paused ? start() : pause();
 document.getElementById('stop').onclick = stop;
 document.getElementById('next').onclick = next;
 
-player.addEventListener('playing', () => { playPauseBtn.textContent = 'Pause'; });
+player.addEventListener('playing', () => {
+  playPauseBtn.textContent = 'Pause';
+  if (announcePending) {
+    announcePending = false;
+    setTimeout(() => say('Playing ' + episodes[current].title), 3000);
+  }
+});
 player.addEventListener('pause', () => { playPauseBtn.textContent = 'Play'; if (player.currentTime > 0) say('Paused'); });
 player.addEventListener('ended', () => { log('Episode ended'); next(); });
 player.addEventListener('error', () => say('Audio error ' + player.error?.code + ' ' + (player.error?.message || '')));

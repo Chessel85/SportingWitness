@@ -224,7 +224,12 @@ function start() {
   // Nothing loaded yet this visit, so begin the current episode from its saved position
   if (!player.src) return playEpisode(current, resumeAt);
   startKeepAlive();
-  player.play().catch(e => say('Could not play: ' + e.message));
+  // The first play after the silent tone starts often fails on iPhone while a second press works,
+  // so try once more by itself before reporting the problem
+  player.play().catch(e => {
+    log(`First play attempt failed: ${e.name}: ${e.message}`);
+    setTimeout(() => player.play().catch(e2 => say(`Could not play: ${e2.name}: ${e2.message}`)), 500);
+  });
 }
 
 function pause() { player.pause(); }

@@ -38,13 +38,18 @@ let announceOnPlaying = null;
 
 function enableMediaSession(p) {
   if (!('mediaSession' in navigator)) return;
+  mediaSessionUsed = true;
   navigator.mediaSession.metadata = new MediaMetadata({ title: 'Nadia Comaneci', artist: 'Sporting Witness', album: 'BBC World Service' });
   navigator.mediaSession.setActionHandler('play', () => p.play());
   navigator.mediaSession.setActionHandler('pause', () => p.pause());
 }
 
+let mediaSessionUsed = false;
+
 function clearMediaSession() {
-  if (!('mediaSession' in navigator)) return;
+  // Only touch the media session if a test turned it on, so the other tests stay clean
+  if (!mediaSessionUsed) return;
+  mediaSessionUsed = false;
   navigator.mediaSession.metadata = null;
   for (const a of ['play', 'pause']) navigator.mediaSession.setActionHandler(a, null);
 }

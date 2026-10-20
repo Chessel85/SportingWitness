@@ -30,23 +30,13 @@
 <h2>Oldest episodes</h2>
 <ul id="list"></ul>
 
-<h2>Audio mode test</h2>
-<fieldset id="modeBox">
-  <legend>Audio mode. Change this if VoiceOver goes silent while playing.</legend>
-  <label><input type="radio" name="mode" value="auto" checked> Default</label><br>
-  <label><input type="radio" name="mode" value="playback"> Playback</label><br>
-  <label><input type="radio" name="mode" value="ambient"> Ambient, mixes with other sounds but obeys the silent switch</label>
-</fieldset>
-
 <h2>Log</h2>
 <div id="log"></div>
 
-<!-- No native controls: the player is driven only by the buttons above -->
-<audio id="player" preload="none"></audio>
-
 <script>
 const FEED = 'https://podcasts.files.bbci.co.uk/p00j2pn5.rss';
-const player = document.getElementById('player');
+// Kept out of the page and away from the media session: either one makes VoiceOver go silent on iPhone
+const player = new Audio();
 const statusEl = document.getElementById('status');
 const playPauseBtn = document.getElementById('playPause');
 let episodes = [];
@@ -54,18 +44,6 @@ let current = -1;
 
 const log = msg => { document.getElementById('log').textContent += new Date().toLocaleTimeString() + ' ' + msg + '\n'; };
 const say = msg => { statusEl.textContent = msg; log(msg); };
-
-// Safari 16.4+ lets the page choose how its audio shares the device with other sounds, including VoiceOver
-if (navigator.audioSession) {
-  log('Audio session API available, type ' + navigator.audioSession.type);
-  document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', () => {
-    navigator.audioSession.type = r.value;
-    log('Audio mode set to ' + navigator.audioSession.type);
-  }));
-} else {
-  document.getElementById('modeBox').hidden = true;
-  log('Audio session API not available');
-}
 
 async function load() {
   log('Fetching feed');
@@ -95,9 +73,7 @@ function playEpisode(i) {
   current = i;
   const ep = episodes[i];
   player.src = ep.url;
-  if ('mediaSession' in navigator) {
-    navigator.mediaSession.metadata = new MediaMetadata({ title: ep.title, artist: 'Sporting Witness', album: 'BBC World Service' });
-  }
+  say('Playing ' + ep.title);
   start();
 }
 
@@ -122,18 +98,10 @@ playPauseBtn.onclick = () => player.paused ? start() : pause();
 document.getElementById('stop').onclick = stop;
 document.getElementById('next').onclick = next;
 
-player.addEventListener('playing', () => { playPauseBtn.textContent = 'Pause'; say('Playing ' + episodes[current].title); });
+player.addEventListener('playing', () => { playPauseBtn.textContent = 'Pause'; });
 player.addEventListener('pause', () => { playPauseBtn.textContent = 'Play'; if (player.currentTime > 0) say('Paused'); });
 player.addEventListener('ended', () => { log('Episode ended'); next(); });
 player.addEventListener('error', () => say('Audio error ' + player.error?.code + ' ' + (player.error?.message || '')));
-
-// Lets Magic Tap (two-finger double tap) and lock screen buttons control this page
-if ('mediaSession' in navigator) {
-  navigator.mediaSession.setActionHandler('play', start);
-  navigator.mediaSession.setActionHandler('pause', pause);
-  navigator.mediaSession.setActionHandler('stop', stop);
-  navigator.mediaSession.setActionHandler('nexttrack', next);
-}
 
 load().catch(e => say('Could not load episodes: ' + e.message));
 </script>

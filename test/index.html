@@ -22,12 +22,32 @@
 <button type="button" data-src="tone-48k-stereo.mp3">Test 3. MP3 file, 48 kilohertz stereo</button>
 <button type="button" data-src="tone-44k-mono.mp3">Test 4. MP3 file, 44.1 kilohertz mono, same format as the BBC</button>
 <button type="button" data-src="https://open.live.bbc.co.uk/mediaselector/6/redir/version/2.0/mediaset/audio-nondrm-download-rss/proto/http/vpid/p02r47yp.mp3">Test 5. The real BBC episode</button>
+<button type="button" data-src="https://open.live.bbc.co.uk/mediaselector/6/redir/version/2.0/mediaset/audio-nondrm-download-rss/proto/http/vpid/p02r47yp.mp3" data-dom>Test 6. BBC episode using the audio player built into the page</button>
+<button type="button" data-src="https://open.live.bbc.co.uk/mediaselector/6/redir/version/2.0/mediaset/audio-nondrm-download-rss/proto/http/vpid/p02r47yp.mp3" data-media-session>Test 7. BBC episode with lock screen and Magic Tap controls turned on</button>
+<button type="button" data-src="https://open.live.bbc.co.uk/mediaselector/6/redir/version/2.0/mediaset/audio-nondrm-download-rss/proto/http/vpid/p02r47yp.mp3" data-announce>Test 8. BBC episode, announcing Playing once the audio has started</button>
+<button type="button" data-src="https://open.live.bbc.co.uk/mediaselector/6/redir/version/2.0/mediaset/audio-nondrm-download-rss/proto/http/vpid/p02r47yp.mp3" data-dom data-media-session data-announce>Test 9. BBC episode exactly as the main page plays it</button>
 <button type="button" id="stop">Stop</button>
+<audio id="domPlayer" preload="none"></audio>
 
 <script>
 const player = new Audio();
+const domPlayer = document.getElementById('domPlayer');
 const statusEl = document.getElementById('status');
 let ctx;
+let announceOnPlaying = null;
+
+function enableMediaSession(p) {
+  if (!('mediaSession' in navigator)) return;
+  navigator.mediaSession.metadata = new MediaMetadata({ title: 'Nadia Comaneci', artist: 'Sporting Witness', album: 'BBC World Service' });
+  navigator.mediaSession.setActionHandler('play', () => p.play());
+  navigator.mediaSession.setActionHandler('pause', () => p.pause());
+}
+
+function clearMediaSession() {
+  if (!('mediaSession' in navigator)) return;
+  navigator.mediaSession.metadata = null;
+  for (const a of ['play', 'pause']) navigator.mediaSession.setActionHandler(a, null);
+}
 
 document.querySelectorAll('button[data-src], button[data-test]').forEach(btn => btn.addEventListener('click', () => {
   stop();
@@ -39,20 +59,28 @@ document.querySelectorAll('button[data-src], button[data-test]').forEach(btn => 
     osc.start();
     osc.stop(ctx.currentTime + 10);
   } else {
-    player.src = btn.dataset.src;
-    player.play().catch(e => { statusEl.textContent = name + ' failed: ' + e.message; });
+    const p = 'dom' in btn.dataset ? domPlayer : player;
+    if ('mediaSession' in btn.dataset) enableMediaSession(p);
+    announceOnPlaying = 'announce' in btn.dataset ? name : null;
+    p.src = btn.dataset.src;
+    p.play().catch(e => { statusEl.textContent = name + ' failed: ' + e.message; });
   }
   statusEl.textContent = name + ' playing';
 }));
 
 function stop() {
   player.pause();
+  domPlayer.pause();
+  clearMediaSession();
   if (ctx) ctx.suspend().then(() => ctx.close());
   ctx = null;
 }
 
 document.getElementById('stop').onclick = () => { stop(); statusEl.textContent = 'Stopped'; };
-player.addEventListener('ended', () => { statusEl.textContent = 'Finished'; });
+for (const p of [player, domPlayer]) {
+  p.addEventListener('ended', () => { statusEl.textContent = 'Finished'; });
+  p.addEventListener('playing', () => { if (announceOnPlaying) statusEl.textContent = 'Playing ' + announceOnPlaying; });
+}
 </script>
 </body>
 </html>

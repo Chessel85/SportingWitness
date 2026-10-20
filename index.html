@@ -26,6 +26,7 @@
   <button id="playPause" type="button">Play</button>
   <button id="stop" type="button">Stop</button>
   <button id="next" type="button">Next episode</button>
+  <button id="nearEnd" type="button">Test: skip to last 10 seconds</button>
 </div>
 
 <h2>Oldest episodes</h2>
@@ -43,8 +44,6 @@ const playPauseBtn = document.getElementById('playPause');
 let episodes = [];
 let current = -1;
 let announcePending = false;
-// Episode waiting to start once the lead-in beep finishes
-let pendingUrl = null;
 
 const log = msg => { document.getElementById('log').textContent += new Date().toLocaleTimeString() + ' ' + msg + '\n'; };
 const say = msg => { statusEl.textContent = msg; log(msg); };
@@ -91,10 +90,9 @@ function playEpisode(i) {
   startKeepAlive();
   current = i;
   const ep = episodes[i];
-  // A short beep first: short local clips have not silenced VoiceOver, so it may stop the episode from doing so
-  pendingUrl = ep.url;
-  player.src = 'beep.m4a';
-  log('Beep, then ' + ep.title);
+  player.src = ep.url;
+  log('Starting ' + ep.title);
+  announcePending = true;
   start();
 }
 
@@ -119,6 +117,11 @@ function next() {
 playPauseBtn.onclick = () => player.paused ? start() : pause();
 document.getElementById('stop').onclick = stop;
 document.getElementById('next').onclick = next;
+document.getElementById('nearEnd').onclick = () => {
+  if (!player.duration) return say('Start an episode first');
+  player.currentTime = Math.max(0, player.duration - 10);
+  say('Skipped to the last 10 seconds');
+};
 
 player.addEventListener('playing', () => {
   playPauseBtn.textContent = 'Pause';
@@ -129,14 +132,6 @@ player.addEventListener('playing', () => {
 });
 player.addEventListener('pause', () => { playPauseBtn.textContent = 'Play'; if (player.currentTime > 0 && !player.ended) say('Paused'); });
 player.addEventListener('ended', () => {
-  if (pendingUrl) {
-    player.src = pendingUrl;
-    pendingUrl = null;
-    // VoiceOver goes silent if it is mid-sentence when a new episode's audio starts, so announce afterwards
-    announcePending = true;
-    start();
-    return;
-  }
   log('Episode ended');
   next();
 });

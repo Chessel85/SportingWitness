@@ -33,6 +33,7 @@
 <h2>Up next</h2>
 <ul id="list"></ul>
 <button id="undo" type="button" hidden>Undo</button>
+<p><a id="skippedLink" href="not-interested/">Episodes marked not interested</a></p>
 
 <h2>Backup</h2>
 <p>Your progress is saved in Safari on this phone. Save a backup file in case Safari's data is cleared.</p>
@@ -126,6 +127,7 @@ function render() {
   const skipped = Object.values(progress.marks).filter(m => m === 'skipped').length;
   document.getElementById('count').textContent =
     `${heard} of ${episodes.length} heard` + (skipped ? `, ${skipped} not interested` : '');
+  document.getElementById('skippedLink').textContent = `Episodes marked not interested (${skipped})`;
 
   const ep = episodes[current];
   document.getElementById('nowTitle').textContent = ep
@@ -293,6 +295,15 @@ player.addEventListener('ended', () => {
   finish();
 });
 player.addEventListener('error', () => say('Audio error ' + player.error?.code + ' ' + (player.error?.message || '')));
+// Coming back from the Not interested page can show this page from Safari's cache,
+// so pick up any episodes restored there, keeping this page's own place in the episode
+window.addEventListener('pageshow', e => {
+  if (!e.persisted || !episodes.length) return;
+  const { current: cur, position } = progress;
+  loadProgress();
+  Object.assign(progress, { current: cur, position });
+  render();
+});
 window.addEventListener('pagehide', () => {
   if (current >= 0 && player.src && !player.ended && resumeAt === 0) {
     progress.position = player.currentTime;

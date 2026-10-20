@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Not interested - Sporting Witness</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 16px; background: #fff; color: #111; }
+  @media (prefers-color-scheme: dark) { body { background: #111; color: #eee; } }
+  button { font-size: 1.1rem; padding: 12px 16px; margin: 4px 8px 4px 0; }
+  ul { list-style: none; padding: 0; }
+  li { margin-bottom: 16px; }
+  h2 { font-size: 1.05rem; margin: 0 0 4px; }
+</style>
+</head>
+<body>
+<h1>Not interested</h1>
+<p><a href="../">Back to the player</a></p>
+<p id="status" role="status" aria-live="polite">Loading episodes</p>
+<ul id="list"></ul>
+
+<script>
+// Shares the main page's saved progress, which lives in localStorage on the same site
+const FEED = 'https://podcasts.files.bbci.co.uk/p00j2pn5.rss';
+const STORE = 'sportingWitnessProgress';
+const statusEl = document.getElementById('status');
+let episodes = [];
+
+const say = msg => { statusEl.textContent = msg; };
+const longDate = d => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+const plural = n => n === 1 ? '1 episode' : n + ' episodes';
+
+function loadProgress() {
+  try { return JSON.parse(localStorage.getItem(STORE)) || { marks: {} }; }
+  catch (e) { return { marks: {} }; }
+}
+
+function saveProgress(progress) {
+  try { localStorage.setItem(STORE, JSON.stringify(progress)); return true; }
+  catch (e) { return false; }
+}
+
+const skipped = () => {
+  const marks = loadProgress().marks || {};
+  return episodes.filter(ep => marks[ep.guid] === 'skipped');
+};
+
+function render() {
+  const list = document.getElementById('list');
+  list.replaceChildren();
+  skipped().forEach(ep => {
+    const li = document.createElement('li');
+    const h = document.createElement('h2');
+    h.textContent = `${ep.title}, ${longDate(ep.date)}`;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'Restore to Up next';
+    btn.setAttribute('aria-label', 'Restore ' + ep.title + ' to Up next');
+    btn.onclick = () => restore(ep);
+    li.append(h, btn);
+    list.append(li);
+  });
+}
+
+function restore(ep) {
+  // Put the VoiceOver cursor on the next Restore button once this one is gone
+  const pos = [...document.querySelectorAll('#list button')].indexOf(document.activeElement);
+  const progress = loadProgress();
+  delete progress.marks[ep.guid];
+  if (!saveProgress(progress)) return say('Could not save. ' + ep.title + ' was not restored.');
+  render();
+  const left = skipped().length;
+  say(`Restored ${ep.title}. ` + (left ? `${plural(left)} left.` : 'None left.'));
+  const buttons = document.querySelectorAll('#list button');
+  (buttons[Math.min(Math.max(0, pos), buttons.length - 1)] || document.querySelector('a')).focus();
+}
+
+async function load() {
+  const res = await fetch(FEED);
+  const xml = new DOMParser().parseFromString(await res.text(), 'text/xml');
+  episodes = [...xml.querySelectorAll('item')].map(item => ({
+    guid: item.querySelector('guid')?.textContent,
+    title: item.querySelector('title')?.textContent,
+    date: new Date(item.querySelector('pubDate')?.textContent),
+  })).sort((a, b) => a.date - b.date);
+  render();
+  const n = skipped().length;
+  say(n ? `${plural(n)} marked not interested, oldest first.` : 'No episodes are marked not interested.');
+}
+
+load().catch(e => say('Could not load episodes: ' + e.message));
+</script>
+</body>
+</html>

@@ -3,74 +3,190 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sporting Witness PoC</title>
+<title>Sporting Witness</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 16px; background: #fff; color: #111; }
   @media (prefers-color-scheme: dark) { body { background: #111; color: #eee; } }
   button { font-size: 1.1rem; padding: 12px 16px; margin: 4px 8px 4px 0; }
   .controls button { min-width: 6em; }
   ul { list-style: none; padding: 0; }
-  li button { width: 100%; text-align: left; }
-  fieldset { margin: 12px 0; }
+  li { margin-bottom: 16px; }
+  h3 { font-size: 1.05rem; margin: 0 0 4px; }
+  label { display: block; margin: 8px 0; }
   #log { font-family: monospace; font-size: .85rem; white-space: pre-wrap; }
 </style>
 </head>
 <body>
-<h1>Sporting Witness test page</h1>
-<p><a href="test/">Go to the VoiceOver audio test page</a></p>
-<p><a href="https://www.bbc.co.uk/programmes/p00j2pn5">Go to the BBC's own Sporting Witness page</a></p>
+<h1>Sporting Witness</h1>
+<p id="status" role="status" aria-live="polite">Loading episodes</p>
+<p id="count"></p>
 
 <h2>Now playing</h2>
-<p id="status" role="status" aria-live="polite">Nothing playing</p>
+<p id="nowTitle">Nothing yet</p>
+<p id="nowAbout"></p>
 <div class="controls">
   <button id="playPause" type="button">Play</button>
   <button id="stop" type="button">Stop</button>
   <button id="next" type="button">Next episode</button>
-  <button id="nearEnd" type="button">Test: skip to last 10 seconds</button>
 </div>
 
-<h2>Oldest episodes</h2>
+<h2>Up next</h2>
 <ul id="list"></ul>
+<button id="undo" type="button" hidden>Undo</button>
 
-<h2>Log</h2>
-<div id="log"></div>
+<h2>Backup</h2>
+<p>Your progress is saved in Safari on this phone. Save a backup file in case Safari's data is cleared.</p>
+<button id="export" type="button">Save backup file</button>
+<label>Restore from a backup file <input id="import" type="file" accept=".json,application/json"></label>
+
+<h2>Links</h2>
+<p><a href="test/">Go to the VoiceOver audio test page</a></p>
+<p><a href="https://www.bbc.co.uk/programmes/p00j2pn5">Go to the BBC's own Sporting Witness page</a></p>
+
+<h2>Testing</h2>
+<button id="nearEnd" type="button">Test: skip to last 10 seconds</button>
+<details>
+  <summary>Log</summary>
+  <div id="log"></div>
+</details>
 
 <script>
 const FEED = 'https://podcasts.files.bbci.co.uk/p00j2pn5.rss';
+const STORE = 'sportingWitnessProgress';
+const UP_NEXT = 10;
 // Kept out of the page and away from the media session: either one makes VoiceOver go silent on iPhone
 const player = new Audio();
 const statusEl = document.getElementById('status');
 const playPauseBtn = document.getElementById('playPause');
+const undoBtn = document.getElementById('undo');
 let episodes = [];
 let current = -1;
 let announcePending = false;
+let resumeAt = 0;
+let announceFrom = 0;
+let lastSaved = 0;
+let lastChange = null;
+// marks maps an episode guid to 'played' or 'skipped'; current and position say where to resume
+let progress = { marks: {}, current: null, position: 0 };
 
 const log = msg => { document.getElementById('log').textContent += new Date().toLocaleTimeString() + ' ' + msg + '\n'; };
 const say = msg => { statusEl.textContent = msg; log(msg); };
+const longDate = d => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+const minutes = secs => { const m = Math.round(secs / 60); return m === 1 ? '1 minute' : m + ' minutes'; };
+
+function loadProgress() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE));
+    if (saved && saved.marks) progress = saved;
+  } catch (e) { log('Could not read saved progress: ' + e.message); }
+}
+
+function saveProgress() {
+  try { localStorage.setItem(STORE, JSON.stringify(progress)); }
+  catch (e) { log('Could not save progress: ' + e.message); }
+}
+
+const isUnheard = i => !progress.marks[episodes[i].guid];
+const upNext = () => episodes.map((_, i) => i).filter(i => i !== current && isUnheard(i));
+
+// Point at the saved episode, or else the oldest unheard one
+function pickCurrent() {
+  current = episodes.findIndex(ep => ep.guid === progress.current);
+  resumeAt = current >= 0 ? progress.position || 0 : 0;
+  if (current < 0) current = episodes.findIndex((_, i) => isUnheard(i));
+}
 
 async function load() {
+  loadProgress();
   log('Fetching feed');
   const res = await fetch(FEED);
   const xml = new DOMParser().parseFromString(await res.text(), 'text/xml');
   episodes = [...xml.querySelectorAll('item')].map(item => ({
+    guid: item.querySelector('guid')?.textContent,
     title: item.querySelector('title')?.textContent,
+    about: item.getElementsByTagName('itunes:subtitle')[0]?.textContent || '',
     date: new Date(item.querySelector('pubDate')?.textContent),
+    duration: Number(item.getElementsByTagName('itunes:duration')[0]?.textContent) || 0,
     // Upgrade to https so the page isn't loading mixed content
     url: item.querySelector('enclosure')?.getAttribute('url').replace(/^http:/, 'https:'),
   })).sort((a, b) => a.date - b.date);
   log(`Loaded ${episodes.length} episodes, oldest ${episodes[0].date.toDateString()}`);
 
+  pickCurrent();
+  render();
+  if (current < 0) return say('You have heard every episode');
+  const ep = episodes[current];
+  say(resumeAt > 30
+    ? `Ready to resume ${ep.title} at ${minutes(resumeAt)} in. Press Play.`
+    : `Ready to play ${ep.title}. Press Play.`);
+}
+
+function render() {
+  const heard = Object.values(progress.marks).filter(m => m === 'played').length;
+  const skipped = Object.values(progress.marks).filter(m => m === 'skipped').length;
+  document.getElementById('count').textContent =
+    `${heard} of ${episodes.length} heard` + (skipped ? `, ${skipped} not interested` : '');
+
+  const ep = episodes[current];
+  document.getElementById('nowTitle').textContent = ep
+    ? `${ep.title}, ${longDate(ep.date)}, ${minutes(ep.duration)}`
+    : 'Nothing left to play';
+  document.getElementById('nowAbout').textContent = ep ? ep.about : '';
+
   const list = document.getElementById('list');
-  episodes.slice(0, 5).forEach((ep, i) => {
+  list.replaceChildren();
+  upNext().slice(0, UP_NEXT).forEach(i => {
+    const e = episodes[i];
     const li = document.createElement('li');
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = `Play ${ep.title}, ${ep.date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`;
-    btn.onclick = () => playEpisode(i);
-    li.append(btn);
+    const h = document.createElement('h3');
+    h.textContent = `${e.title}, ${longDate(e.date)}, ${minutes(e.duration)}`;
+    const play = document.createElement('button');
+    play.type = 'button';
+    play.textContent = 'Play';
+    play.setAttribute('aria-label', 'Play ' + e.title);
+    play.onclick = () => { playEpisode(i); playPauseBtn.focus(); };
+    const skip = document.createElement('button');
+    skip.type = 'button';
+    skip.textContent = 'Not interested';
+    skip.setAttribute('aria-label', 'Not interested in ' + e.title);
+    skip.onclick = () => notInterested(i);
+    li.append(h, play, skip);
     list.append(li);
   });
+  if (!list.children.length) list.innerHTML = '<li>No more episodes</li>';
 }
+
+function mark(i, status) {
+  const guid = episodes[i].guid;
+  lastChange = { guid, before: progress.marks[guid] };
+  progress.marks[guid] = status;
+  undoBtn.hidden = false;
+  undoBtn.textContent = (status === 'played' ? 'Undo marking as heard: ' : 'Undo not interested: ') + episodes[i].title;
+}
+
+function notInterested(i) {
+  // Put the VoiceOver cursor back at the same place in the list once this item is gone
+  const pos = [...document.querySelectorAll('#list li')].findIndex(li => li.contains(document.activeElement));
+  mark(i, 'skipped');
+  saveProgress();
+  render();
+  say(`Marked ${episodes[i].title} as not interested`);
+  const plays = document.querySelectorAll('#list li button:first-of-type');
+  (plays[Math.max(0, pos)] || undoBtn).focus();
+}
+
+undoBtn.onclick = () => {
+  if (!lastChange) return;
+  if (lastChange.before) progress.marks[lastChange.guid] = lastChange.before;
+  else delete progress.marks[lastChange.guid];
+  const ep = episodes.find(e => e.guid === lastChange.guid);
+  lastChange = null;
+  undoBtn.hidden = true;
+  saveProgress();
+  render();
+  say(`Undone. ${ep.title} is back in the list`);
+  document.querySelector('#list li button')?.focus();
+};
 
 // On the test page, files only kept VoiceOver talking after the page had made its own tone,
 // so keep an inaudible page-made tone running underneath the episodes
@@ -86,18 +202,25 @@ function startKeepAlive() {
   log('Silent tone started');
 }
 
-function playEpisode(i) {
+function playEpisode(i, startAt = 0) {
   startKeepAlive();
   current = i;
+  resumeAt = announceFrom = lastSaved = startAt;
   const ep = episodes[i];
   player.src = ep.url;
+  progress.current = ep.guid;
+  progress.position = startAt;
+  saveProgress();
+  render();
   log('Starting ' + ep.title);
   announcePending = true;
   start();
 }
 
 function start() {
-  if (current < 0) return playEpisode(0);
+  if (current < 0) return say('You have heard every episode');
+  // Nothing loaded yet this visit, so begin the current episode from its saved position
+  if (!player.src) return playEpisode(current, resumeAt);
   startKeepAlive();
   player.play().catch(e => say('Could not play: ' + e.message));
 }
@@ -107,35 +230,109 @@ function pause() { player.pause(); }
 function stop() {
   player.pause();
   player.currentTime = 0;
+  progress.position = 0;
+  saveProgress();
   say('Stopped');
 }
 
-function next() {
-  if (current + 1 < episodes.length) playEpisode(current + 1);
+// Next and reaching the end both count the episode as heard
+function finish() {
+  if (current < 0) return;
+  mark(current, 'played');
+  progress.position = 0;
+  const following = upNext()[0];
+  if (following === undefined) {
+    current = -1;
+    progress.current = null;
+    player.pause();
+    saveProgress();
+    render();
+    return say('That was the last episode. You have heard them all.');
+  }
+  playEpisode(following);
 }
 
 playPauseBtn.onclick = () => player.paused ? start() : pause();
 document.getElementById('stop').onclick = stop;
-document.getElementById('next').onclick = next;
+document.getElementById('next').onclick = finish;
 document.getElementById('nearEnd').onclick = () => {
   if (!player.duration) return say('Start an episode first');
   player.currentTime = Math.max(0, player.duration - 10);
   say('Skipped to the last 10 seconds');
 };
 
+player.addEventListener('loadedmetadata', () => {
+  if (resumeAt > 0) {
+    player.currentTime = resumeAt;
+    resumeAt = 0;
+  }
+});
 player.addEventListener('playing', () => {
   playPauseBtn.textContent = 'Pause';
   if (announcePending) {
     announcePending = false;
-    setTimeout(() => say('Playing ' + episodes[current].title), 200);
+    const where = announceFrom > 30 ? ` from ${minutes(announceFrom)} in` : '';
+    setTimeout(() => say('Playing ' + episodes[current].title + where), 200);
   }
 });
-player.addEventListener('pause', () => { playPauseBtn.textContent = 'Play'; if (player.currentTime > 0 && !player.ended) say('Paused'); });
+player.addEventListener('timeupdate', () => {
+  if (resumeAt > 0 || Math.abs(player.currentTime - lastSaved) < 5) return;
+  lastSaved = progress.position = player.currentTime;
+  saveProgress();
+});
+player.addEventListener('pause', () => {
+  playPauseBtn.textContent = 'Play';
+  if (current >= 0 && player.currentTime > 0 && !player.ended) {
+    progress.position = player.currentTime;
+    saveProgress();
+    say('Paused');
+  }
+});
 player.addEventListener('ended', () => {
   log('Episode ended');
-  next();
+  finish();
 });
 player.addEventListener('error', () => say('Audio error ' + player.error?.code + ' ' + (player.error?.message || '')));
+window.addEventListener('pagehide', () => {
+  if (current >= 0 && player.src && !player.ended && resumeAt === 0) {
+    progress.position = player.currentTime;
+    saveProgress();
+  }
+});
+
+document.getElementById('export').onclick = () => {
+  const blob = new Blob([JSON.stringify(progress, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `sporting-witness-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  say('Backup file created. Safari may ask you to download it, then it goes in your Downloads folder in Files.');
+};
+
+document.getElementById('import').onchange = async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (!data || typeof data.marks !== 'object') throw new Error('this is not a Sporting Witness backup');
+    progress = { marks: data.marks, current: data.current || null, position: data.position || 0 };
+    saveProgress();
+    player.pause();
+    player.removeAttribute('src');
+    player.load();
+    pickCurrent();
+    lastChange = null;
+    undoBtn.hidden = true;
+    render();
+    say(`Backup restored. ${document.getElementById('count').textContent}.`);
+  } catch (err) {
+    say('Could not restore the backup: ' + err.message);
+  }
+  e.target.value = '';
+};
 
 load().catch(e => say('Could not load episodes: ' + e.message));
 </script>

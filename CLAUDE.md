@@ -36,23 +36,20 @@ So the rules for the player are:
 
 `test/index.html` is the diagnostic page (tests 1 to 9) that isolated this. Keep it, and keep it linked from the main page.
 
-## Current state (proof of concept, `index.html`)
+## Current state (full player, `index.html`, October 2026)
 
-- Loads the feed, sorts oldest first, and lists the first 5 episodes as "Play <title>, <date>" buttons.
-- Play/Pause, Stop and Next episode controls. Autoplay to the next episode works.
-- "Test: skip to last 10 seconds" button, used to test autoplay. Remove it in the full build, or keep it if the user wants it.
-- Announces "Playing <title>" 0.2 seconds after playback starts (cut from 3 seconds; awaiting VoiceOver confirmation).
-- No progress is saved yet.
+- The 0.2 second "Playing <title>" announcement delay is confirmed to keep VoiceOver talking.
+- Progress is saved in `localStorage` under `sportingWitnessProgress` as `{ marks: { guid: "played" | "skipped" }, current: guid, position: seconds }`. All access is wrapped in try/catch.
+- On load, the page picks the saved episode and position (or the oldest unheard episode) and says "Ready to resume ... Press Play".
+- Next episode, and an episode ending, mark it `played` and start the oldest unheard episode (user decision: Next = listened).
+- The progress count reads like "142 of 684 heard, 3 not interested". The feed currently has 684 items.
+- Now playing shows the title, date, length and the feed's `itunes:subtitle`.
+- Up next lists the 10 oldest unheard episodes, each with an `h3` plus Play and "Not interested" buttons. After "Not interested", focus moves to the next item's Play button. An Undo button reverses the last mark.
+- Backup: "Save backup file" downloads the progress JSON, and a file input restores it (this replaces the current progress).
+- "Test: skip to last 10 seconds" and the log are kept under a Testing heading.
 
 ## Next steps
 
-1. **Cut the post-start announcement delay from 3 seconds to about 0.2 seconds** (the `setTimeout` in the `playing` handler). Then ask the user to confirm VoiceOver still keeps talking.
-2. Build the full player:
-   - Save progress in `localStorage`, keyed by episode guid: `played` or `skipped` status, plus the playback position within the current episode.
-   - **Next episode marks the current episode as listened** (user decision).
-   - The "Up next" list shows the next ~10 unheard episodes, each with Play and "Not interested" buttons.
-   - Show a progress count, e.g. "142 of 685 heard".
-   - Resume the last episode at its saved position.
-   - Export and import progress as JSON (a backup, since cleared Safari data would lose it).
-   - Wrap all `localStorage` access in try/catch.
+1. Get the user to test the full player on the phone (resume after reload, Not interested, Undo, backup and restore).
+2. Ideas not built yet: skip back and forward buttons, and retesting the Media Session API with the keep-alive running.
 3. Optional: find the missing 2013 episodes (possibly in the "Witness History: Archive 2013" feed, `p02p8z14.rss`) and merge them in.

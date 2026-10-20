@@ -47,6 +47,7 @@ So the rules for the player are:
 - Up next lists the 10 oldest unheard episodes, each with an `h3` plus Play and "Not interested" buttons. After "Not interested", focus moves to the next item's Play button. An Undo button reverses the last mark.
 - Below Up next, a link "Episodes marked not interested (N)" goes to `not-interested/index.html`. That page fetches the feed, lists the `skipped` episodes oldest first (an `h2` plus a "Restore to Up next" button each), and restoring deletes the mark from the same `localStorage` key. The main page re-reads progress on `pageshow` from Safari's back cache.
 - Backup: "Save backup file" downloads the progress JSON, and a file input restores it (this replaces the current progress).
+- The first `play()` after a page load is rejected with `AbortError` on iPhone, probably because the keep-alive `AudioContext` starting up in the same press interrupts it. `start()` retries once after 500 ms, which the user confirmed works.
 - "Test: skip to last 10 seconds" and the log are kept under a Testing heading.
 
 ## Next steps

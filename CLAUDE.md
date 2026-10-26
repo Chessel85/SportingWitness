@@ -41,6 +41,7 @@ So the rules for the player are:
 - The 0.2 second "Playing <title>" announcement delay is confirmed to keep VoiceOver talking.
 - Progress is saved in `localStorage` under `sportingWitnessProgress` as `{ marks: { guid: "played" | "skipped" }, current: guid, position: seconds }`. All access is wrapped in try/catch.
 - On load, the page picks the saved episode and position (or the oldest unheard episode) and says "Ready to resume ... Press Play".
+- "Rewind 15 seconds" sits before Play (goes to the start if under 15 seconds in; before loading it moves the saved position). User confirmed it works.
 - Next episode, and an episode ending, mark it `played` and start the oldest unheard episode (user decision: Next = listened).
 - The progress count reads like "142 of 684 heard, 3 not interested". The feed currently has 684 items.
 - Now playing shows the title, date, length and the feed's `itunes:subtitle`.
@@ -53,5 +54,5 @@ So the rules for the player are:
 ## Next steps
 
 1. Get the user to test the full player on the phone (resume after reload, Not interested, Undo, the Not interested page, backup and restore).
-2. Ideas not built yet: skip back and forward buttons, and retesting the Media Session API with the keep-alive running.
+2. Ideas not built yet: a skip forward button, and retesting the Media Session API with the keep-alive running.
 3. Optional: find the missing 2013 episodes (possibly in the "Witness History: Archive 2013" feed, `p02p8z14.rss`) and merge them in.

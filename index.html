@@ -25,6 +25,7 @@
 <p id="nowTitle">Nothing yet</p>
 <p id="nowAbout"></p>
 <div class="controls">
+  <button id="rewind" type="button">Rewind 15 seconds</button>
   <button id="playPause" type="button">Play</button>
   <button id="stop" type="button">Stop</button>
   <button id="next" type="button">Next episode</button>
@@ -234,6 +235,19 @@ function start() {
 
 function pause() { player.pause(); }
 
+function rewind() {
+  if (current < 0) return;
+  // Before the episode has loaded, move the saved position that playback will start from
+  const pending = !player.src || resumeAt > 0;
+  const from = pending ? resumeAt : player.currentTime;
+  const to = Math.max(0, from - 15);
+  if (pending) resumeAt = announceFrom = to;
+  else player.currentTime = to;
+  progress.position = to;
+  saveProgress();
+  say(to === 0 ? 'Back to the start' : 'Back 15 seconds');
+}
+
 function stop() {
   player.pause();
   player.currentTime = 0;
@@ -260,6 +274,7 @@ function finish() {
 }
 
 playPauseBtn.onclick = () => player.paused ? start() : pause();
+document.getElementById('rewind').onclick = rewind;
 document.getElementById('stop').onclick = stop;
 document.getElementById('next').onclick = finish;
 document.getElementById('nearEnd').onclick = () => {
